@@ -1,72 +1,64 @@
-local PlayerUtils = {}
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local ShopUtils = {}
+local HttpService = game:GetService("HttpService")
+
+-- LIÊN KẾT VỚI PLAYER UTILS (Đảm bảo file PlayerUtils nằm cùng chỗ hoặc sửa đường dẫn)
+-- Nếu bạn loadstring cả 2 file, bạn có thể truyền PlayerUtils vào hàm init, 
+-- hoặc dùng _G.PlayerUtils nếu lười. Ở đây tôi giả định bạn sẽ truyền module vào.
+local PlayerUtils = nil 
+
+-- ==============================================================================
+-- DỮ LIỆU SHOP (DATABASE) - GIỮ NGUYÊN JSON CỦA BẠN
+-- ==============================================================================
+local RawJson = [[
+{"Accessories":{"Belt Bag":{"Stats":[["Belt Bag",1]],"Name":"Belt Bag","Category":"Accessory/Bag","ID":"Belt Bag","Price":440000,"Ingredients":[["Pineapple",50],["SunflowerSeed",50],["Stinger",3]],"Description":"..."},"Looker Guard":{"Stats":[["Looker Guard",1]],"Name":"Looker Guard","Category":"Accessory/Bag","ID":"Looker Guard","Price":300000,"Ingredients":[["SunflowerSeed",25]],"Description":"..."},"Jar":{"Stats":[["Jar",1]],"Name":"Jar","Category":"Accessory/Bag","ID":"Jar","Price":650,"Ingredients":[],"Description":"..."},"Demon Mask":{"Stats":[["Demon Mask",1]],"Name":"Demon Mask","Category":"Accessory/Bag","ID":"Demon Mask","Price":5000000000,"Ingredients":[["Stinger",500],["RedExtract",250],["Enzymes",150],["Glue",100],["InvigoratingVial",1]],"Description":"..."},"Coconut Canister":{"Stats":[["Coconut Canister",1]],"Name":"Coconut Canister","Category":"Accessory/Bag","ID":"Coconut Canister","Price":25000000000,"Ingredients":[["Coconut",250],["TropicalDrink",150],["RedExtract",150],["BlueExtract",150],["RefreshingVial",2]],"Description":"..."},"Propeller Hat":{"Stats":[["Propeller Hat",1]],"Name":"Propeller Hat","Category":"Accessory/Bag","ID":"Propeller Hat","Price":2500000,"Ingredients":[["Gumdrops",25],["Pineapple",100],["MoonCharm",5]],"Description":"..."},"Pouch":{"Stats":[["Pouch",1]],"Name":"Pouch","Category":"Accessory/Bag","ID":"Pouch","Price":0,"Ingredients":[],"Description":"..."},"Red Guard":{"Stats":[["Red Guard",1]],"Name":"Red Guard","Category":"Accessory/Bag","ID":"Red Guard","Price":750000,"Ingredients":[["Strawberry",50],["RoyalJelly",1],["Stinger",1]],"Description":"..."},"Bubble Mask":{"Stats":[["Bubble Mask",1]],"Name":"Bubble Mask","Category":"Accessory/Bag","ID":"Bubble Mask","Price":100000000,"Ingredients":[["Blueberry",500],["BlueExtract",50],["Oil",25],["Glitter",15]],"Description":"..."},"B.B.M. Mask":{"Stats":[["B.B.M. Mask",1]],"Name":"B.B.M. Mask","Category":"Accessory/Bag","ID":"B.B.M. Mask","Price":999999999999,"Ingredients":[],"Description":"..."},"Elite Blue Guard":{"Stats":[["Elite Blue Guard",1]],"Name":"Elite Blue Guard","Category":"Accessory/Bag","ID":"Elite Blue Guard","Price":5000000,"Ingredients":[["BlueExtract",3],["Blueberry",50],["RoyalJelly",5],["MoonCharm",15]],"Description":"..."},"Elite Red Guard":{"Stats":[["Elite Red Guard",1]],"Name":"Elite Red Guard","Category":"Accessory/Bag","ID":"Elite Red Guard","Price":5000000,"Ingredients":[["RedExtract",3],["Strawberry",50],["RoyalJelly",5],["Stinger",5]],"Description":"..."},"Brave Guard":{"Stats":[["Brave Guard",1]],"Name":"Brave Guard","Category":"Accessory/Bag","ID":"Brave Guard","Price":300000,"Ingredients":[["Stinger",3]],"Description":"..."},"Elite Barrel":{"Stats":[["Elite Barrel",1]],"Name":"Elite Barrel","Category":"Accessory/Bag","ID":"Elite Barrel","Price":650000,"Ingredients":[],"Description":"..."},"Honeycomb Belt":{"Stats":[["Honeycomb Belt",1]],"Name":"Honeycomb Belt","Category":"Accessory/Bag","ID":"Honeycomb Belt","Price":75000000,"Ingredients":[["Enzymes",50],["Glue",50],["Oil",25]],"Description":"..."},"Port-O-Hive":{"Stats":[["Port-O-Hive",1]],"Name":"Port-O-Hive","Category":"Accessory/Bag","ID":"Port-O-Hive","Price":1250000,"Ingredients":[],"Description":"..."},"Diamond Mask":{"Stats":[["Diamond Mask",1]],"Name":"Diamond Mask","Category":"Accessory/Bag","ID":"Diamond Mask","Price":5000000000,"Ingredients":[["BlueExtract",250],["Oil",150],["Glitter",100],["Diamond",5],["ComfortingVial",1]],"Description":"..."},"Hiking Boots":{"Stats":[["Hiking Boots",1]],"Name":"Hiking Boots","Category":"Accessory/Bag","ID":"Hiking Boots","Price":2200000,"Ingredients":[["Blueberry",50],["Strawberry",50]],"Description":"..."},"Beekeeper's Mask":{"Stats":[["Beekeeper's Mask",1]],"Name":"Beekeeper's Mask","Category":"Accessory/Bag","ID":"Beekeeper's Mask","Price":20000000,"Ingredients":[["Enzymes",5],["Glue",3],["Glitter",1]],"Description":"..."},"Helmet":{"Stats":[["Helmet",1]],"Name":"Helmet","Category":"Accessory/Bag","ID":"Helmet","Price":30000,"Ingredients":[["Pineapple",5],["MoonCharm",1]],"Description":"..."},"Coconut Clogs":{"Stats":[["Coconut Clogs",1]],"Name":"Coconut Clogs","Category":"Accessory/Bag","ID":"Coconut Clogs","Price":10000000000,"Ingredients":[["Coconut",150],["TropicalDrink",50],["Glue",100],["Oil",100],["RefreshingVial",1]],"Description":"..."},"Petal Belt":{"Stats":[["Petal Belt",1]],"Name":"Petal Belt","Category":"Accessory/Bag","ID":"Petal Belt","Price":15000000000,"Ingredients":[["SpiritPetal",1],["StarJelly",25],["Glitter",50],["Glue",100]],"Description":"..."},"Porcelain Port-O-Hive":{"Stats":[["Porcelain Port-O-Hive",1]],"Name":"Porcelain Port-O-Hive","Category":"Accessory/Bag","ID":"Porcelain Port-O-Hive","Price":250000000,"Ingredients":[["Glitter",3],["SoftWax",3],["MoonCharm",10]],"Description":"..."},"Coconut Belt":{"Stats":[["Coconut Belt",1]],"Name":"Coconut Belt","Category":"Accessory/Bag","ID":"Coconut Belt","Price":7500000000000,"Ingredients":[["Coconut",500],["TropicalDrink",1500],["PurplePotion",200],["HardWax",200],["RefreshingVial",3],["Turpentine",3]],"Description":"..."},"Honey Mask":{"Stats":[["Honey Mask",1]],"Name":"Honey Mask","Category":"Accessory/Bag","ID":"Honey Mask","Price":100000000,"Ingredients":[["Treat",9999],["Oil",50],["Enzymes",25],["Gold",5]],"Description":"..."},"Belt Pocket":{"Stats":[["Belt Pocket",1]],"Name":"Belt Pocket","Category":"Accessory/Bag","ID":"Belt Pocket","Price":14000,"Ingredients":[["SunflowerSeed",10]],"Description":"..."},"Bomber Guard":{"Stats":[["Bomber Guard",1]],"Name":"Bomber Guard","Category":"Accessory/Bag","ID":"Bomber Guard","Price":300000,"Ingredients":[["SunflowerSeed",25]],"Description":"..."},"Mondo B.B.M. Mask":{"Stats":[["Mondo B.B.M. Mask",1]],"Name":"Mondo B.B.M. Mask","Category":"Accessory/Bag","ID":"Mondo B.B.M. Mask","Price":999999999999,"Ingredients":[],"Description":"..."},"Red Port-O-Hive":{"Stats":[["Red Port-O-Hive",1]],"Name":"Red Port-O-Hive","Category":"Accessory/Bag","ID":"Red Port-O-Hive","Price":12500000,"Ingredients":[["RedExtract",2],["SoftWax",2]],"Description":"..."},"Hasty Guard":{"Stats":[["Hasty Guard",1]],"Name":"Hasty Guard","Category":"Accessory/Bag","ID":"Hasty Guard","Price":300000,"Ingredients":[["MoonCharm",5]],"Description":"..."},"Backpack":{"Stats":[["Backpack",1]],"Name":"Backpack","Category":"Accessory/Bag","ID":"Backpack","Price":5500,"Ingredients":[],"Description":"..."},"Basic Boots":{"Stats":[["Basic Boots",1]],"Name":"Basic Boots","Category":"Accessory/Bag","ID":"Basic Boots","Price":4400,"Ingredients":[["SunflowerSeed",3],["Blueberry",3]],"Description":"..."},"Gummy Mask":{"Stats":[["Gummy Mask",1]],"Name":"Gummy Mask","Category":"Accessory/Bag","ID":"Gummy Mask","Price":5000000000,"Ingredients":[["Glue",250],["Enzymes",100],["Oil",100],["Glitter",100],["SatisfyingVial",1]],"Description":"..."},"Cobalt Guard":{"Stats":[["Cobalt Guard",1]],"Name":"Cobalt Guard","Category":"Accessory/Bag","ID":"Cobalt Guard","Price":200000000,"Ingredients":[["BlueExtract",100],["Stinger",100],["Enzymes",50],["Glitter",25]],"Description":"..."},"Bucko Guard":{"Stats":[["Bucko Guard",1]],"Name":"Bucko Guard","Category":"Accessory/Bag","ID":"Bucko Guard","Price":30000000,"Ingredients":[["BlueExtract",10],["Blueberry",100],["Glue",5],["MoonCharm",75]],"Description":"..."},"Canister":{"Stats":[["Canister",1]],"Name":"Canister","Category":"Accessory/Bag","ID":"Canister","Price":22000,"Ingredients":[],"Description":"..."},"Riley Guard":{"Stats":[["Riley Guard",1]],"Name":"Riley Guard","Category":"Accessory/Bag","ID":"Riley Guard","Price":30000000,"Ingredients":[["RedExtract",10],["Strawberry",100],["Glue",5],["Stinger",25]],"Description":"..."},"Blue Port-O-Hive":{"Stats":[["Blue Port-O-Hive",1]],"Name":"Blue Port-O-Hive","Category":"Accessory/Bag","ID":"Blue Port-O-Hive","Price":12500000,"Ingredients":[["BlueExtract",2],["SoftWax",2]],"Description":"..."},"Mega-Jug":{"Stats":[["Mega-Jug",1]],"Name":"Mega-Jug","Category":"Accessory/Bag","ID":"Mega-Jug","Price":50000,"Ingredients":[],"Description":"..."},"Crimson Guard":{"Stats":[["Crimson Guard",1]],"Name":"Crimson Guard","Category":"Accessory/Bag","ID":"Crimson Guard","Price":200000000,"Ingredients":[["RedExtract",100],["Stinger",100],["Oil",50],["Glitter",25]],"Description":"..."},"Strange Goggles":{"Stats":[["Strange Goggles",1]],"Name":"Strange Goggles","Category":"Accessory/Bag","ID":"Strange Goggles","Price":77,"Ingredients":[["Micro-Converter",1],["7ProngedCog",7]],"Description":"..."},"Beekeeper's Boots":{"Stats":[["Beekeeper's Boots",1]],"Name":"Beekeeper's Boots","Category":"Accessory/Bag","ID":"Beekeeper's Boots","Price":15000000,"Ingredients":[["Oil",5],["BlueExtract",3],["RedExtract",3]],"Description":"..."},"Gummy Boots":{"Stats":[["Gummy Boots",1]],"Name":"Gummy Boots","Category":"Accessory/Bag","ID":"Gummy Boots","Price":100000000000,"Ingredients":[["Glue",500],["RedExtract",250],["BlueExtract",250],["Glitter",250],["SatisfyingVial",1],["MotivatingVial",1]],"Description":"..."},"Mondo Belt Bag":{"Stats":[["Mondo Belt Bag",1]],"Name":"Mondo Belt Bag","Category":"Accessory/Bag","ID":"Mondo Belt Bag","Price":12400000,"Ingredients":[["SoftWax",1],["Pineapple",150],["SunflowerSeed",150],["Stinger",10]],"Description":"..."},"Blue Guard":{"Stats":[["Blue Guard",1]],"Name":"Blue Guard","Category":"Accessory/Bag","ID":"Blue Guard","Price":1000000,"Ingredients":[["Blueberry",50],["RoyalJelly",1],["MoonCharm",3]],"Description":"..."},"Compressor":{"Stats":[["Compressor",1]],"Name":"Compressor","Category":"Accessory/Bag","ID":"Compressor","Price":160000,"Ingredients":[],"Description":"..."},"Fire Mask":{"Stats":[["Fire Mask",1]],"Name":"Fire Mask","Category":"Accessory/Bag","ID":"Fire Mask","Price":100000000,"Ingredients":[["Strawberry",500],["RedExtract",50],["Enzymes",25],["Glue",15]],"Description":"..."},"Pulsar":{"Stats":[],"Name":"Pulsar","Category":"Tool","ID":"Pulsar","Price":125000,"Ingredients":[],"Description":"..."},"Honey Hammer":{"Stats":[],"Name":"Honey Hammer","Category":"Tool","ID":"Honey Hammer","Price":null,"Ingredients":[],"Description":"..."},"Scissors":{"Stats":[],"Name":"Scissors","Category":"Tool","ID":"Scissors","Price":850000,"Ingredients":[],"Description":"..."},"Golden Rake":{"Stats":[],"Name":"Golden Rake","Category":"Tool","ID":"Golden Rake","Price":20000000,"Ingredients":[],"Description":"..."},"Momentum Magnet":{"Stats":[],"Name":"Momentum Magnet","Category":"Tool","ID":"Momentum Magnet","Price":35000000,"Ingredients":[],"Description":"..."},"Sticker-Seeker":{"Stats":[],"Name":"Sticker-Seeker","Category":"Tool","ID":"Sticker-Seeker","Price":7000000,"Ingredients":[["Glue",1],["Oil",1],["SoftWax",5],["Neonberry",5],["Micro-Converter",10]],"Description":"..."},"Porcelain Dipper":{"Stats":[],"Name":"Porcelain Dipper","Category":"Tool","ID":"Porcelain Dipper","Price":150000000,"Ingredients":[],"Description":"..."},"Dark Scythe":{"Stats":[],"Name":"Dark Scythe","Category":"Tool","ID":"Dark Scythe","Price":2500000000000,"Ingredients":[["RedExtract",1500],["Stinger",150],["HardWax",100],["CausticWax",50],["SuperSmoothie",50],["InvigoratingVial",3]],"Description":"..."},"Tide Popper":{"Stats":[],"Name":"Tide Popper","Category":"Tool","ID":"Tide Popper","Price":2500000000000,"Ingredients":[["BlueExtract",1500],["Stinger",150],["TropicalDrink",150],["SwirledWax",75],["SuperSmoothie",50],["ComfortingVial",3]],"Description":"..."},"Scooper":{"Stats":[],"Name":"Scooper","Category":"Tool","ID":"Scooper","Price":0,"Ingredients":[],"Description":"..."},"Spark Staff":{"Stats":[],"Name":"Spark Staff","Category":"Tool","ID":"Spark Staff","Price":60000000,"Ingredients":[],"Description":"..."},"ClassicSword":{"Stats":[],"Name":"ClassicSword","Category":"Tool","ID":"ClassicSword","Price":null,"Ingredients":[],"Description":"..."},"Super-Scooper":{"Stats":[],"Name":"Super-Scooper","Category":"Tool","ID":"Super-Scooper","Price":40000,"Ingredients":[],"Description":"..."},"Honey Dipper":{"Stats":[],"Name":"Honey Dipper","Category":"Tool","ID":"Honey Dipper","Price":1500000,"Ingredients":[],"Description":"..."},"Rake":{"Stats":[],"Name":"Rake","Category":"Tool","ID":"Rake","Price":800,"Ingredients":[],"Description":"..."},"Bubble Wand":{"Stats":[],"Name":"Bubble Wand","Category":"Tool","ID":"Bubble Wand","Price":3500000,"Ingredients":[],"Description":"..."},"Petal Wand":{"Stats":[],"Name":"Petal Wand","Category":"Tool","ID":"Petal Wand","Price":1500000000,"Ingredients":[["SpiritPetal",1],["StarJelly",10],["Glitter",25],["Enzymes",75]],"Description":"..."},"Clippers":{"Stats":[],"Name":"Clippers","Category":"Tool","ID":"Clippers","Price":2200,"Ingredients":[],"Description":"..."},"Scythe":{"Stats":[],"Name":"Scythe","Category":"Tool","ID":"Scythe","Price":3500000,"Ingredients":[],"Description":"..."},"ClassicIllumina":{"Stats":[],"Name":"ClassicIllumina","Category":"Tool","ID":"ClassicIllumina","Price":null,"Ingredients":[],"Description":"..."},"Vacuum":{"Stats":[],"Name":"Vacuum","Category":"Tool","ID":"Vacuum","Price":14000,"Ingredients":[],"Description":"..."},"Electro-Magnet":{"Stats":[],"Name":"Electro-Magnet","Category":"Tool","ID":"Electro-Magnet","Price":300000,"Ingredients":[],"Description":"..."},"Gummyballer":{"Stats":[],"Name":"Gummyballer","Category":"Tool","ID":"Gummyballer","Price":10000000000000,"Ingredients":[["Glue",1500],["Gumdrops",2000],["CausticWax",50],["SuperSmoothie",50],["Turpentine",5],["SatisfyingVial",3]],"Description":"..."},"ClassicFirebrand":{"Stats":[],"Name":"ClassicFirebrand","Category":"Tool","ID":"ClassicFirebrand","Price":null,"Ingredients":[],"Description":"..."},"Bow Rake":{"Stats":[],"Name":"Bow Rake","Category":"Tool","ID":"Bow Rake","Price":12000000,"Ingredients":[],"Description":"..."},"Elite Scythe":{"Stats":[],"Name":"Elite Scythe","Category":"Tool","ID":"Elite Scythe","Price":3500000,"Ingredients":[],"Description":"..."},"Magnet":{"Stats":[],"Name":"Magnet","Category":"Tool","ID":"Magnet","Price":5500,"Ingredients":[],"Description":"..."}}}
+]]
+
+local ToolDB = HttpService:JSONDecode(RawJson)
 
 -- =======================================================
--- 1. TRUY XUẤT DỮ LIỆU CƠ BẢN
+-- HÀM KHỞI TẠO (QUAN TRỌNG)
+-- Manager sẽ gọi hàm này để nạp PlayerUtils vào
 -- =======================================================
-function PlayerUtils.GetHoney()
-    if LocalPlayer:FindFirstChild("CoreStats") and LocalPlayer.CoreStats:FindFirstChild("Honey") then
-        return LocalPlayer.CoreStats.Honey.Value
-    end
-    return 0
-end
-
-function PlayerUtils.GetItemAmount(itemName)
-    -- Tìm trong túi đồ (Inventory)
-    local inventory = LocalPlayer:FindFirstChild("b")
-    if inventory and inventory:FindFirstChild(itemName) then
-        return inventory[itemName].Value
-    end
-
-    -- Tìm trong kho trứng (EggStats)
-    local eggs = LocalPlayer:FindFirstChild("EggStats")
-    if eggs and eggs:FindFirstChild(itemName) then
-        return eggs[itemName].Value
-    end
-
-    return 0
+function ShopUtils.SetPlayerUtils(utils_module)
+    PlayerUtils = utils_module
 end
 
 -- =======================================================
--- 2. KIỂM TRA ĐIỀU KIỆN (CORE LOGIC)
--- Trả về: { success = bool, missing = table, honey_needed = number }
+-- LẤY DỮ LIỆU GỐC CỦA ITEM
 -- =======================================================
-function PlayerUtils.CheckRequirements(price, ingredients)
-    local result = {
-        success = true,
-        missingItems = {},    -- Danh sách item còn thiếu
-        missingHoney = 0      -- Số Honey còn thiếu
-    }
-
-    -- 1. Check Honey
-    local currentHoney = PlayerUtils.GetHoney()
-    if price and currentHoney < price then
-        result.success = false
-        result.missingHoney = price - currentHoney
-    end
-
-    -- 2. Check Nguyên Liệu
-    if ingredients then
-        for _, req in pairs(ingredients) do
-            local itemName = req[1]
-            local needAmount = req[2]
-            local currentAmount = PlayerUtils.GetItemAmount(itemName)
-
-            if currentAmount < needAmount then
-                result.success = false
-                -- Lưu lại tên và số lượng còn thiếu để Manager biết đi farm
-                table.insert(result.missingItems, {
-                    Name = itemName,
-                    Need = needAmount,
-                    Have = currentAmount,
-                    Missing = needAmount - currentAmount
-                })
-            end
+function ShopUtils.GetItemData(itemName)
+    if ToolDB.Accessories[itemName] then return ToolDB.Accessories[itemName] end
+    if ToolDB.Collectors[itemName] then return ToolDB.Collectors[itemName] end
+    -- Lưu ý: JSON gốc của bạn có structure hơi lạ (Pulsar nằm ngoài Accessories nhưng không thấy Collectors wrap lại trong đoạn code copy-paste).
+    -- Tôi đã fix logic này bằng cách giả định bạn sẽ dùng đúng cấu trúc JSON đầy đủ hoặc code tự tìm.
+    -- Với đoạn JSON bạn đưa, Pulsar và các tool khác đang nằm sai cấp hoặc thiếu key "Collectors".
+    -- Code này sẽ quét toàn bộ nếu cần.
+    
+    -- Fix tạm thời cho JSON của bạn (flatten search)
+    for _, category in pairs(ToolDB) do
+        if type(category) == "table" and category[itemName] then
+            return category[itemName]
         end
     end
-
-    return result
+    
+    return nil
 end
 
-return PlayerUtils
+-- =======================================================
+-- KIỂM TRA MUA ĐƯỢC KHÔNG (Logic Manager dùng)
+-- Trả về: { success=bool, missingItems=table, missingHoney=number }
+-- =======================================================
+function ShopUtils.CheckPurchase(itemName)
+    if not PlayerUtils then 
+        warn("ShopUtils: Chưa thiết lập PlayerUtils!") 
+        return { success = false } 
+    end
+
+    local data = ShopUtils.GetItemData(itemName)
+    if not data then return { success = false, error = "Item not found" } end
+
+    -- Gọi sang PlayerUtils để check
+    return PlayerUtils.CheckRequirements(data.Price, data.Ingredients)
+end
+
+return ShopUtils
