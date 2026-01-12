@@ -1,74 +1,72 @@
-local module = {}
+local PlayerUtils = {}
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- =======================================================
--- HÀM LẤY SỐ LƯỢNG ITEM HIỆN CÓ
+-- 1. TRUY XUẤT DỮ LIỆU CƠ BẢN
 -- =======================================================
-function module.GetItemAmount(itemName)
-    -- Trong Bee Swarm, item thường nằm trong folder 'b' hoặc 'EggStats' của người chơi
-    local inventory = LocalPlayer:FindFirstChild("b") -- Folder chứa items (Blueberry, Glue,...)
-    local eggs = LocalPlayer:FindFirstChild("EggStats") -- Folder chứa trứng (Gold Egg, Silver Egg,...)
-    
-    -- 1. Tìm trong kho item thường
-    if inventory then
-        local item = inventory:FindFirstChild(itemName)
-        if item then return item.Value end
-    end
-
-    -- 2. Tìm trong kho trứng (nếu item là trứng)
-    if eggs then
-        local egg = eggs:FindFirstChild(itemName)
-        if egg then return egg.Value end
-    end
-
-    return 0 -- Không tìm thấy = 0
-end
-
--- =======================================================
--- HÀM LẤY SỐ HONEY HIỆN CÓ
--- =======================================================
-function module.GetHoney()
+function PlayerUtils.GetHoney()
     if LocalPlayer:FindFirstChild("CoreStats") and LocalPlayer.CoreStats:FindFirstChild("Honey") then
         return LocalPlayer.CoreStats.Honey.Value
     end
     return 0
 end
 
+function PlayerUtils.GetItemAmount(itemName)
+    -- Tìm trong túi đồ (Inventory)
+    local inventory = LocalPlayer:FindFirstChild("b")
+    if inventory and inventory:FindFirstChild(itemName) then
+        return inventory[itemName].Value
+    end
+
+    -- Tìm trong kho trứng (EggStats)
+    local eggs = LocalPlayer:FindFirstChild("EggStats")
+    if eggs and eggs:FindFirstChild(itemName) then
+        return eggs[itemName].Value
+    end
+
+    return 0
+end
+
 -- =======================================================
--- HÀM CHECK XEM ĐỦ TIỀN VÀ NGUYÊN LIỆU KHÔNG?
--- Input: 
---    price: Số Honey cần (Number)
---    ingredients: Danh sách nguyên liệu (Table dạng [["Glue", 5], ["Oil", 2]])
--- Output: 
---    true: Đủ hết
---    false: Thiếu gì đó (kèm thông báo)
+-- 2. KIỂM TRA ĐIỀU KIỆN (CORE LOGIC)
+-- Trả về: { success = bool, missing = table, honey_needed = number }
 -- =======================================================
-function module.CanAfford(price, ingredients, LogFunc)
-    -- 1. Check Tiền
-    local myHoney = module.GetHoney()
-    if price and myHoney < price then
-        if LogFunc then LogFunc("Not enough Honey! Need: " .. price, Color3.fromRGB(255, 80, 80)) end
-        return false
+function PlayerUtils.CheckRequirements(price, ingredients)
+    local result = {
+        success = true,
+        missingItems = {},    -- Danh sách item còn thiếu
+        missingHoney = 0      -- Số Honey còn thiếu
+    }
+
+    -- 1. Check Honey
+    local currentHoney = PlayerUtils.GetHoney()
+    if price and currentHoney < price then
+        result.success = false
+        result.missingHoney = price - currentHoney
     end
 
     -- 2. Check Nguyên Liệu
     if ingredients then
         for _, req in pairs(ingredients) do
-            local itemName = req[1]      -- Tên item (Ví dụ: "Glue")
-            local amountNeed = req[2]    -- Số lượng cần (Ví dụ: 5)
-            local amountHave = module.GetItemAmount(itemName)
+            local itemName = req[1]
+            local needAmount = req[2]
+            local currentAmount = PlayerUtils.GetItemAmount(itemName)
 
-            if amountHave < amountNeed then
-                if LogFunc then 
-                    LogFunc("Missing: " .. itemName .. " (" .. amountHave .. "/" .. amountNeed .. ")", Color3.fromRGB(255, 80, 80)) 
-                end
-                return false
+            if currentAmount < needAmount then
+                result.success = false
+                -- Lưu lại tên và số lượng còn thiếu để Manager biết đi farm
+                table.insert(result.missingItems, {
+                    Name = itemName,
+                    Need = needAmount,
+                    Have = currentAmount,
+                    Missing = needAmount - currentAmount
+                })
             end
         end
     end
 
-    return true
+    return result
 end
 
-return module
+return PlayerUtils
