@@ -1,149 +1,127 @@
 local module = {}
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
 
-function module.Run(LogFunc, WaitFunc, Utils)
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    
-    -- LOAD MODULES
-    local shopUtilsUrl = "https://raw.githubusercontent.com/Luanbets/BSSA-Z/main/Modules/ShopUtils.lua?t=" .. tostring(tick())
-    local autoFarmUrl = "https://raw.githubusercontent.com/Luanbets/BSSA-Z/main/Modules/AutoFarm.lua?t=" .. tostring(tick())
-    
-    LogFunc("Loading ShopUtils & AutoFarm...", Color3.fromRGB(255, 255, 255))
-    
-    local ShopUtils = nil
-    local AutoFarm = nil
-    
-    -- Load ShopUtils
-    local success1, content1 = pcall(function() return game:HttpGet(shopUtilsUrl) end)
-    if success1 then
-        local loadFunc = loadstring(content1)
-        if loadFunc then ShopUtils = loadFunc() end
-    end
-    
-    -- Load AutoFarm
-    local success2, content2 = pcall(function() return game:HttpGet(autoFarmUrl) end)
-    if success2 then
-        local loadFunc = loadstring(content2)
-        if loadFunc then AutoFarm = loadFunc() end
-    end
+-- Biến toàn cục để quản lý việc đang Farm
+_G.IsFarming = false 
 
-    if not ShopUtils or not AutoFarm then
-        LogFunc("⚠️ Lỗi tải module!", Color3.fromRGB(255, 80, 80))
+-- =======================================================
+-- 1. LIÊN KẾT DỮ LIỆU (Worker gọi Data)
+-- =======================================================
+local function GetFieldData()
+    -- Load FieldData để lấy tọa độ và size
+    local url = "https://raw.githubusercontent.com/Luanbets/BSSA-Z/main/Modules/FieldData.lua"
+    local success, content = pcall(function() return game:HttpGet(url) end)
+    if success then
+        local func = loadstring(content)
+        if func then return func() end
+    end
+    return nil
+end
+
+-- =======================================================
+-- 2. HÀM TÌM TOKEN (Logic Worker)
+-- =======================================================
+local function FindBestToken(fieldPos, fieldSize)
+    local closestToken = nil
+    local minDist = 80 -- Chỉ tìm token trong phạm vi gần
+    
+    local folder = Workspace:FindFirstChild("Collectibles")
+    if not folder then return nil end
+
+    for _, token in pairs(folder:GetChildren()) do
+        -- Token phải có Part (BasePart) hoặc Model có PrimaryPart
+        -- Dữ liệu Token lấy theo TokenData nếu cần ưu tiên sau này
+        local pos = nil
+        if token:IsA("BasePart") then pos = token.Position 
+        elseif token:IsA("Model") and token.PrimaryPart then pos = token.PrimaryPart.Position end
+        
+        if pos then
+            -- Kiểm tra token có nằm trong Cánh Đồng không
+            local distToField = (pos - fieldPos).Magnitude
+            if distToField <= (fieldSize.X / 1.2) then -- Chia 1.2 để chắc chắn nằm trong vùng
+                local distToPlayer = (LocalPlayer.Character.HumanoidRootPart.Position - pos).Magnitude
+                if distToPlayer < minDist then
+                    minDist = distToPlayer
+                    closestToken = pos
+                end
+            end
+        end
+    end
+    return closestToken
+end
+
+-- =======================================================
+-- 3. HÀM FARM CHÍNH (Worker thực thi)
+-- =======================================================
+function module.Farm(fieldName, Utils)
+    local FieldData = GetFieldData()
+    if not FieldData or not FieldData[fieldName] then
+        warn("AutoFarm: Không tìm thấy data của " .. tostring(fieldName))
         return
     end
 
-    -- Tọa độ
-    local EggShopPos = CFrame.new(-140.41, 4.69, 243.97)
-    local ToolShopPos = CFrame.new(84.88, 4.51, 290.49)
-
-    -- Data Check
-    local currentData = Utils.LoadData() 
-    local daMua = currentData.Cotmoc1_Progress or 0 
+    local info = FieldData[fieldName] -- Lấy ID, Pos, Size, Color
+    local fPos = info.Pos
+    local fSize = info.Size
     
-    if daMua >= 4 or currentData.Cotmoc1Done then
-        LogFunc("Cotmoc1: Completed!", Color3.fromRGB(0, 255, 0))
-        if not currentData.Cotmoc1Done then Utils.SaveData("Cotmoc1Done", true) end
-        return
-    end
+    _G.IsFarming = true
 
-    -- ===============================================
-    -- 1. MUA TRỨNG (2 QUẢ)
-    -- ===============================================
-    if daMua < 2 then
-        LogFunc("Moving to Egg Shop...", Color3.fromRGB(255, 220, 0)) 
-        Utils.Tween(EggShopPos, WaitFunc)
-        task.wait(1)
-        
-        for i = (daMua + 1), 2 do
-            WaitFunc()
-            game:GetService("ReplicatedStorage").Events.ItemPackageEvent:InvokeServer("Purchase", {["Type"]="Basic", ["Amount"]=1, ["Category"]="Eggs"})
-            Utils.SaveData("Cotmoc1_Progress", i)
-            daMua = i 
-            LogFunc("Bought Egg " .. i .. "/2", Color3.fromRGB(200, 200, 200))
-            task.wait(1)
-        end
-    end
+    -- A. Bay tới cánh đồng
+    local targetCFrame = CFrame.new(fPos.X, fPos.Y + 5, fPos.Z)
+    if Utils then Utils.Tween(targetCFrame) end -- Dùng Tween của Utilities
+    
+    task.wait(0.5)
 
-    -- ===============================================
-    -- 2. MUA BACKPACK (Step 3)
-    -- ===============================================
-    if daMua < 3 then
-        LogFunc("Moving to Tool Shop...", Color3.fromRGB(255, 220, 0))
-        Utils.Tween(ToolShopPos, WaitFunc)
-        task.wait(1)
+    -- B. Vòng lặp Farm (Chạy liên tục cho đến khi _G.IsFarming = false)
+    local Humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    local Root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-        WaitFunc()
+    while _G.IsFarming and LocalPlayer.Character do
+        Humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        Root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         
-        -- CHECK TRƯỚC KHI MUA
-        local canBuy = ShopUtils.CheckBuy("Backpack", LogFunc)
-        
-        if not canBuy then
-            -- THIẾU NGUYÊN LIỆU → GỌI AUTOFARM
-            LogFunc("⚠️ Chưa đủ điều kiện mua Backpack", Color3.fromRGB(255, 150, 0))
-            LogFunc("🔄 Bắt đầu Farm tự động...", Color3.fromRGB(0, 255, 255))
+        if not Humanoid or not Root then task.wait(1) continue end
+
+        -- 1. Tìm Token
+        local tokenPos = FindBestToken(fPos, fSize)
+
+        if tokenPos then
+            -- 2. Nếu có Token -> Lao tới lấy
+            Humanoid:MoveTo(tokenPos)
+            local timeOut = 0
+            while (Root.Position - tokenPos).Magnitude > 4 and timeOut < 2 do
+                task.wait(0.1); timeOut = timeOut + 0.1
+                if not _G.IsFarming then break end
+            end
+        else
+            -- 3. Nếu không có Token -> Đi Random trong vùng Field Size
+            local rX = math.random(-fSize.X/2.5, fSize.X/2.5)
+            local rZ = math.random(-fSize.Z/2.5, fSize.Z/2.5)
+            local targetPos = Vector3.new(fPos.X + rX, fPos.Y, fPos.Z + rZ)
             
-            AutoFarm.FarmUntilReady("Backpack", LogFunc, Utils)
+            Humanoid:MoveTo(targetPos)
             
-            -- Sau khi farm xong, quay lại shop
-            LogFunc("🔙 Quay lại Tool Shop...", Color3.fromRGB(255, 220, 0))
-            Utils.Tween(ToolShopPos, WaitFunc)
-            task.wait(1)
+            -- Đợi đi tới nơi (hoặc ngắt nếu thấy token mới xuất hiện)
+            local timeOut = 0
+            while (Root.Position - targetPos).Magnitude > 4 and timeOut < 1.5 do
+                task.wait(0.1); timeOut = timeOut + 0.1
+                -- Nếu thấy token ngon hơn thì bỏ đi random, quay lại lụm token
+                if FindBestToken(fPos, fSize) then break end 
+                if not _G.IsFarming then break end
+            end
         end
-        
-        -- MUA BACKPACK
-        LogFunc("Buying Backpack...", Color3.fromRGB(255, 255, 255))
-        game:GetService("ReplicatedStorage").Events.ItemPackageEvent:InvokeServer("Purchase", {["Type"]="Backpack", ["Category"]="Accessory"})
-        Utils.SaveData("Cotmoc1_Progress", 3)
-        daMua = 3
-        LogFunc("✅ Bought Backpack", Color3.fromRGB(0, 255, 0))
-        task.wait(1)
+        task.wait()
     end
+    
+    -- Dừng nhân vật khi tắt Farm
+    if Humanoid then Humanoid:MoveTo(Root.Position) end
+end
 
-    -- ===============================================
-    -- 3. MUA RAKE (Step 4)
-    -- ===============================================
-    if daMua == 3 then
-        if not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) then
-            task.wait(2)
-        end
-        
-        LogFunc("Moving to Tool Shop...", Color3.fromRGB(255, 220, 0))
-        Utils.Tween(ToolShopPos, WaitFunc)
-        task.wait(1)
-
-        WaitFunc()
-        
-        -- CHECK TRƯỚC KHI MUA
-        local canBuy = ShopUtils.CheckBuy("Rake", LogFunc)
-        
-        if not canBuy then
-            LogFunc("⚠️ Chưa đủ điều kiện mua Rake", Color3.fromRGB(255, 150, 0))
-            LogFunc("🔄 Bắt đầu Farm tự động...", Color3.fromRGB(0, 255, 255))
-            
-            AutoFarm.FarmUntilReady("Rake", LogFunc, Utils)
-            
-            LogFunc("🔙 Quay lại Tool Shop...", Color3.fromRGB(255, 220, 0))
-            Utils.Tween(ToolShopPos, WaitFunc)
-            task.wait(1)
-        end
-        
-        -- MUA RAKE
-        LogFunc("Buying Rake...", Color3.fromRGB(255, 255, 255))
-        game:GetService("ReplicatedStorage").Events.ItemPackageEvent:InvokeServer("Purchase", {["Type"]="Rake", ["Category"]="Collector"})
-        Utils.SaveData("Cotmoc1_Progress", 4)
-        daMua = 4
-        LogFunc("✅ Bought Rake", Color3.fromRGB(0, 255, 0))
-        task.wait(1)
-    end
-
-    -- ===============================================
-    -- HOÀN THÀNH
-    -- ===============================================
-    if daMua >= 4 then
-        LogFunc("🎉 Cotmoc1 Full Done!", Color3.fromRGB(0, 255, 0))
-        Utils.SaveData("Cotmoc1Done", true)
-    else
-        LogFunc("⏳ Cotmoc1 Paused at step " .. daMua, Color3.fromRGB(255, 200, 100))
-    end
+-- Hàm ngắt Farm
+function module.Stop()
+    _G.IsFarming = false
 end
 
 return module
