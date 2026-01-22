@@ -3,101 +3,65 @@ local Workspace = game:GetService("Workspace")
 local lp = Players.LocalPlayer
 
 -- =========================================================
--- 1. LOAD MODULES (Đã điền sẵn đường dẫn chuẩn của bạn)
+-- 1. LOAD MODULES TỪ GITHUB (KHÔNG CẦN LƯU FILE)
 -- =========================================================
--- Lưu ý: Đảm bảo bạn đã lưu các file kia vào folder workspace của executor đúng theo đường dẫn này
-local FieldDataPath   = "luanbets/bsstest/BSStest-main/Modules/FieldData.lua"
-local MonsterDataPath = "luanbets/bsstest/BSStest-main/Modules/MonsterData.lua"
-local UtilitiesPath   = "luanbets/bsstest/BSStest-main/Modules/Utilities.lua"
+-- Đường dẫn gốc tới thư mục Modules trên GitHub của bạn (Dạng RAW)
+local RepoURL = "https://raw.githubusercontent.com/Luanbets/BSStest/main/Modules/"
 
-local function LoadModule(path)
-    if not isfile(path) then
-        warn("Không tìm thấy file: " .. path)
-        return nil
-    end
-    return loadstring(readfile(path))()
+local function LoadModule(name)
+    -- Tải code từ GitHub về và chạy luôn
+    return loadstring(game:HttpGet(RepoURL .. name .. ".lua"))()
 end
 
-local FieldData   = LoadModule(FieldDataPath)
-local MonsterData = LoadModule(MonsterDataPath)
-local Utilities   = LoadModule(UtilitiesPath)
-
--- Nếu thiếu file thì dừng luôn để tránh lỗi
-if not FieldData or not MonsterData or not Utilities then
-    return
-end
+local FieldData   = LoadModule("FieldData")
+local MonsterData = LoadModule("MonsterData")
+local Utilities   = LoadModule("Utilities")
 
 -- =========================================================
--- 2. HÀM CHECK SỐ ONG THỰC TẾ (Lấy từ Hive)
+-- 2. HÀM HỖ TRỢ (ĐẾM ONG)
 -- =========================================================
 local function getRealBeeCount()
     local honeycombs = Workspace:FindFirstChild("Honeycombs")
     if not honeycombs then return 0 end
-    
     local myHive = nil
     for _, hive in pairs(honeycombs:GetChildren()) do
         if hive:FindFirstChild("Owner") and hive.Owner.Value == lp then
-            myHive = hive
-            break
+            myHive = hive break
         end
     end
-    
-    if myHive then
-        local cellsFolder = myHive:FindFirstChild("Cells")
-        if cellsFolder then
-            local beeCount = 0
-            for _, cell in pairs(cellsFolder:GetChildren()) do
-                if cell:IsA("Model") and string.sub(cell.Name, 1, 1) == "C" then
-                    local cellType = cell:FindFirstChild("CellType")
-                    if cellType and (cellType.Value ~= "Empty" and cellType.Value ~= 0) then
-                        beeCount = beeCount + 1
-                    elseif not cellType then
-                        beeCount = beeCount + 1
-                    end
-                end
+    if myHive and myHive:FindFirstChild("Cells") then
+        local count = 0
+        for _, cell in pairs(myHive.Cells:GetChildren()) do
+            if cell:IsA("Model") and (not cell:FindFirstChild("CellType") or (cell.CellType.Value ~= "Empty" and cell.CellType.Value ~= 0)) then
+                count = count + 1
             end
-            return beeCount
         end
+        return count
     end
     return 0
 end
 
 -- =========================================================
--- 3. CHẠY TEST TỰ ĐỘNG
+-- 3. CHẠY LOGIC CHÍNH
 -- =========================================================
-local function Log(msg)
-    print("[TEST]: " .. tostring(msg))
-end
-
+local function Log(msg) print("[TEST GITHUB]: " .. tostring(msg)) end
 local Tools = { Utils = Utilities }
 
 task.spawn(function()
-    -- Lấy số ong hiện tại
-    local currentBees = getRealBeeCount()
-    Log("Số ong thực tế của bạn: " .. currentBees)
+    local bees = getRealBeeCount()
+    Log("Số ong: " .. bees)
     
-    Log("Đang quét quái vật...")
+    -- Gọi MonsterData đã load từ GitHub
+    local targets = MonsterData.GetTargets(FieldData, bees)
     
-    -- Lấy danh sách quái dựa trên số ong thực
-    local targets = MonsterData.GetTargets(FieldData, currentBees)
-
-    if #targets == 0 then
-        Log("Không tìm thấy quái nào (Có thể do Cooldown hoặc chưa đủ ong).")
-    else
-        Log("Tìm thấy " .. #targets .. " quái khả dụng.")
-        for i, mob in ipairs(targets) do
-            Log(">>> [" .. i .. "] Đang xử lý: " .. mob.Name)
-            
-            -- Gọi hàm giết quái
-            local success = MonsterData.Kill(mob, Tools, Log)
-            
-            if success then
-                Log("✅ Hoàn thành: " .. mob.Name)
-            else
-                Log("❌ Thất bại/Bỏ qua: " .. mob.Name)
-            end
-            task.wait(1.5) -- Nghỉ 1.5s giữa các con
+    if #targets > 0 then
+        Log("Tìm thấy " .. #targets .. " quái.")
+        for _, mob in ipairs(targets) do
+            Log("Đang diệt: " .. mob.Name)
+            MonsterData.Kill(mob, Tools, Log)
+            task.wait(1)
         end
+    else
+        Log("Không có quái nào.")
     end
-    Log("Đã chạy xong quy trình test.")
 end)
